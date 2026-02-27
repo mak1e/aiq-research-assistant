@@ -9,8 +9,8 @@ import { ChatArea } from './ChatArea'
 // Mock the chat store
 const mockRespondToPrompt = vi.fn()
 const mockDismissErrorCard = vi.fn()
-const mockGetThinkingStepsForMessage = vi.fn(() => [])
-const mockChatThinking = vi.fn(() => <div data-testid="chat-thinking">Thinking...</div>)
+const mockGetThinkingStepsForMessage = vi.fn((_messageId: string) => [] as { id: string; displayName: string }[])
+const mockChatThinking = vi.fn((_props: unknown) => <div data-testid="chat-thinking">Thinking...</div>)
 
 vi.mock('@/features/chat', () => ({
   useChatStore: vi.fn(() => ({

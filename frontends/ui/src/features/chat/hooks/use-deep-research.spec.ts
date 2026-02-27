@@ -604,9 +604,7 @@ describe('useDeepResearch', () => {
       expect(mockCompleteDeepResearch).toHaveBeenCalled()
       expect(mockAddErrorCard).toHaveBeenCalledWith(
         'agent.deep_research_failed',
-        'Something went wrong',
-        undefined,
-        true
+        'Something went wrong'
       )
     })
 
@@ -838,8 +836,7 @@ describe('useDeepResearch', () => {
       expect(mockAddErrorCard).toHaveBeenCalledWith(
         'agent.deep_research_failed',
         'Connection lost',
-        testError.stack,
-        true
+        testError.stack
       )
 
       consoleWarnSpy.mockRestore()

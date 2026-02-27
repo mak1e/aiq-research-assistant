@@ -715,7 +715,7 @@ export const useWebSocketChat = (options: UseWebSocketChatOptions = {}): UseWebS
         setStreaming(true)
         setLoading(true)
       } else {
-        addErrorCard('connection.failed', 'WebSocket not connected', undefined, true)
+        addErrorCard('connection.failed', 'WebSocket not connected')
       }
     },
     [

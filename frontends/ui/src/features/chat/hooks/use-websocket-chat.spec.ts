@@ -407,7 +407,7 @@ describe('useWebSocketChat', () => {
       result.current.sendMessage('Hello')
     })
 
-    expect(mockAddErrorCard).toHaveBeenCalledWith('system.unknown', 'No active conversation', undefined, false)
+    expect(mockAddErrorCard).toHaveBeenCalledWith('system.unknown', 'No active conversation')
     expect(mockSetStreaming).toHaveBeenCalledWith(false)
   })
 
@@ -561,8 +561,7 @@ describe('useWebSocketChat', () => {
     expect(mockAddErrorCard).toHaveBeenCalledWith(
       'agent.response_failed',
       'Invalid message format',
-      'Missing required field',
-      true
+      'Missing required field'
     )
     expect(mockSetCurrentStatus).toHaveBeenCalledWith(null)
     expect(mockSetStreaming).toHaveBeenCalledWith(false)
@@ -609,8 +608,7 @@ describe('useWebSocketChat', () => {
       expect(mockAddErrorCard).toHaveBeenCalledWith(
         'connection.failed',
         'Unable to connect to the server. Please check your network connection.',
-        undefined,
-        true
+        undefined
       )
     })
   })
