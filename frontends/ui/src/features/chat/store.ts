@@ -43,15 +43,13 @@ import { hasActiveDeepResearchJob } from './lib/session-activity'
 import {
   logStorageWrite,
   logQuotaExceededPruning,
-  logPruningSuccess,
   logCriticalSessionsClear,
-  logPruningFailure,
   logStorageAvailability,
   logExternalStorageEvent,
   logStoreHydration,
 } from './lib/storage-logger'
 import { pruneMessageForStorage } from './lib/prune-message-for-storage'
-import { ensureStorageCapacity } from './lib/storage-manager'
+import { ensureStorageCapacity, checkStorageHealth } from './lib/storage-manager'
 import { useLayoutStore } from '@/features/layout/store'
 import { WEB_SEARCH_SOURCE_ID } from '@/features/layout/data-sources'
 
@@ -73,25 +71,22 @@ type PersistedChatStorageValue = StorageValue<PersistedChatState>
 const prunePersistedChatState = (value: PersistedChatStorageValue): PersistedChatStorageValue => {
   const state = value.state
 
-  // Only strip heavy refetchable fields (research data that can be re-fetched from backend).
-  // No session count cap, no message count cap, no content caps.
   const conversations: Conversation[] = (state.conversations ?? []).map((conv) => ({
     ...conv,
     messages: (conv.messages ?? []).map(pruneMessageForStorage),
   }))
 
-  const currentConversationId = state.currentConversation?.id
-  const currentConversation =
-    currentConversationId != null
-      ? conversations.find((c) => c.id === currentConversationId) ?? null
-      : null
+  // Store only the ID reference — the full object already lives in conversations[].
+  // On read, getItem reconstructs currentConversation from conversations by ID.
+  // This avoids serializing the active session's messages twice in JSON.
+  const currentConversationId = state.currentConversation?.id ?? null
 
   return {
     ...value,
     state: {
       currentUserId: state.currentUserId ?? null,
       conversations,
-      currentConversation,
+      currentConversation: currentConversationId as unknown as Conversation | null,
       pendingInteraction: state.pendingInteraction ?? null,
     },
   }
@@ -105,45 +100,38 @@ const createResilientStorage = (): PersistStorage<PersistedChatState> | undefine
   }
 
   return {
-    getItem: base.getItem,
+    getItem: async (name: string): Promise<PersistedChatStorageValue | null> => {
+      const raw = await base.getItem(name)
+      if (!raw) return null
+
+      // Reconstruct currentConversation from the ID stored by prunePersistedChatState.
+      const storedId = raw.state.currentConversation as unknown as string | null
+      if (storedId) {
+        const conversations = raw.state.conversations ?? []
+        raw.state.currentConversation = conversations.find((c) => c.id === storedId) ?? null
+      }
+
+      return raw
+    },
     removeItem: base.removeItem,
     setItem: (name: string, value: PersistedChatStorageValue) => {
+      const prunedValue = prunePersistedChatState(value)
+
       try {
-        base.setItem(name, value)
-        // Log successful write (dev-only)
-        logStorageWrite(value.state.conversations ?? [], value.state.currentUserId ?? null)
+        base.setItem(name, prunedValue)
+        logStorageWrite(prunedValue.state.conversations ?? [], prunedValue.state.currentUserId ?? null)
       } catch (error) {
         if (!isQuotaExceededError(error)) {
           throw error
         }
 
-        // Calculate metrics before pruning
-        const beforeConversations = value.state.conversations ?? []
+        const beforeConversations = prunedValue.state.conversations ?? []
         const beforeCount = beforeConversations.length
         const beforeSizeKB = Math.round(
           (JSON.stringify(beforeConversations).length * 2) / 1024
         )
 
-        // Log quota exceeded event
         logQuotaExceededPruning(beforeCount, beforeCount, beforeSizeKB, beforeSizeKB)
-
-        try {
-          const prunedValue = prunePersistedChatState(value)
-          const afterConversations = prunedValue.state.conversations ?? []
-          const afterCount = afterConversations.length
-          const afterSizeKB = Math.round(
-            (JSON.stringify(afterConversations).length * 2) / 1024
-          )
-
-          base.setItem(name, prunedValue)
-
-          // Log successful pruning
-          logPruningSuccess(beforeCount, afterCount, beforeSizeKB, afterSizeKB)
-          return
-        } catch (pruneError) {
-          // Pruning failed - log this critical event
-          logPruningFailure(pruneError)
-        }
 
         // Last resort: clear all conversations
         try {
@@ -160,14 +148,12 @@ const createResilientStorage = (): PersistStorage<PersistedChatState> | undefine
             },
           })
 
-          // Log critical data loss event (ALWAYS logged, even in production)
           logCriticalSessionsClear(
             value.state.currentUserId ?? null,
             lostSessionIds,
             error
           )
         } catch (finalError) {
-          // Even clearing failed - log the catastrophic failure
           console.error('[SessionsStore] ❌ CATASTROPHIC: Failed to clear sessions', {
             error: finalError instanceof Error ? finalError.message : String(finalError),
           })
@@ -395,14 +381,11 @@ export const useChatStore = create<ChatStore>()(
           if (currentConversation?.id) {
             return currentConversation.id
           }
-          // Create a new conversation if none exists
           if (!currentUserId) {
             return undefined
           }
           
-          // Check storage capacity before creating new session
-          // This will auto-cleanup old sessions if storage is over 4MB
-          ensureStorageCapacity(currentConversation?.id ?? null)
+          ensureStorageCapacity(currentConversation?.id ?? null, currentUserId)
           
           const layoutState = useLayoutStore.getState()
           const defaultEnabledDataSourceIds = getDefaultEnabledDataSourceIds()
@@ -456,10 +439,8 @@ export const useChatStore = create<ChatStore>()(
             deepResearchLastEventId,
           } = get()
           
-          // Check storage capacity when switching to a different session
-          // This will auto-cleanup old sessions if storage is over 4MB
           if (currentConversation?.id !== conversationId) {
-            ensureStorageCapacity(conversationId)
+            ensureStorageCapacity(conversationId, currentUserId)
           }
           
           const conversation = conversations.find((c) => c.id === conversationId)
@@ -1322,6 +1303,13 @@ export const useChatStore = create<ChatStore>()(
             false,
             'addAgentResponse'
           )
+
+          // Proactive storage check after response — this is when storage
+          // meaningfully grows, not just on session create/switch.
+          if (!checkStorageHealth().isHealthy) {
+            const { currentUserId } = get()
+            ensureStorageCapacity(currentConversation.id, currentUserId)
+          }
         },
 
         addAgentResponseWithMeta: (
