@@ -174,12 +174,12 @@ class UploadOrchestratorImpl {
 
       if (collection) {
         const files = await client.listFiles(sessionId)
-        
+
         // Final session check after second async call
         if (sessionId !== this.currentSessionId) {
           return
         }
-        
+
         store.setFilesFromServer(sessionId, files)
         store.setCurrentCollection(sessionId)
         store.setCollectionInfo(collection)

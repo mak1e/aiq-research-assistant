@@ -68,7 +68,7 @@ export const useDeepResearch = (): UseDeepResearchReturn => {
   const timeoutIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const cancelFallbackRef = useRef<NodeJS.Timeout | null>(null)
   const researchStartTimeRef = useRef<number | null>(null)
-  
+
   // Track whether all todos have been completed (signals final report phase)
   const allTodosCompletedRef = useRef(false)
 
@@ -110,7 +110,7 @@ export const useDeepResearch = (): UseDeepResearchReturn => {
     addDeepResearchBanner,
     setStreamLoaded,
   } = useChatStore()
-  
+
   /**
    * Check if the current session owns the active deep research stream.
    * This prevents SSE events from mutating the wrong session.
@@ -575,14 +575,14 @@ export const useDeepResearch = (): UseDeepResearchReturn => {
     const effectStreaming = isDeepResearchStreaming
     let connectTimeout: NodeJS.Timeout | null = null
     let cancelled = false
-    
+
     if (effectJobId && effectStreaming) {
       // Verify state hasn't changed before connecting (prevents race conditions)
       const currentState = useChatStore.getState()
       if (currentState.deepResearchJobId !== effectJobId || !currentState.isDeepResearchStreaming) {
         return // State changed, don't connect
       }
-      
+
       // Defer connect by 50ms so React StrictMode cleanup can cancel it.
       // StrictMode sequence: mount1-effect → mount1-cleanup → mount2-effect.
       // The cleanup clears the timeout, preventing mount1 from ever connecting.

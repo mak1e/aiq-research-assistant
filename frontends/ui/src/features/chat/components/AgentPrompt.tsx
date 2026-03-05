@@ -172,4 +172,3 @@ const ResponseDisplay: FC<{ response?: string }> = ({ response }) => {
     </Flex>
   )
 }
-

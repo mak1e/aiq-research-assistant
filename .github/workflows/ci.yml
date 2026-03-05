@@ -47,6 +47,9 @@ jobs:
           . .venv/bin/activate
           uv pip install -e ".[dev]"
           uv pip install nbconvert
+          uv pip install -e ./frontends/aiq_api
+          uv pip install -e ./sources/google_scholar_paper_search
+          uv pip install -e "./sources/knowledge_layer[all]"
 
       - name: Ruff checks
         run: |
@@ -57,7 +60,7 @@ jobs:
       - name: Run remaining pre-commit hooks
         run: |
           . .venv/bin/activate
-          SKIP=ruff-check,ruff-format pre-commit run --all-files
+          SKIP=ruff-check,ruff-format,pytest,helm-lint pre-commit run --all-files
 
   test:
     name: Pytest and Coverage
@@ -93,7 +96,8 @@ jobs:
             --cov=src/aiq_agent \
             --cov-report=xml \
             --cov-report=html \
-            --cov-report=term
+            --cov-report=term \
+            --cov-fail-under=65
 
       - name: Upload coverage artifacts
         if: always()
@@ -105,6 +109,24 @@ jobs:
             coverage.xml
             htmlcov/
           retention-days: 7
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Lint Helm charts
+        run: |
+          for chart in deploy/helm/helm-charts-k8s/*; do
+            if [ -d "$chart" ]; then
+              helm lint "$chart"
+            fi
+          done
 
   test-scripts:
     name: Script Validation
@@ -151,4 +173,3 @@ jobs:
           . .venv/bin/activate
           chmod +x ci/scripts/test_scripts.sh
           ci/scripts/test_scripts.sh --skip-setup
-

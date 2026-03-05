@@ -378,16 +378,16 @@ export const useChatStore = create<ChatStore>()(
 
         ensureSession: () => {
           const { currentConversation, currentUserId } = get()
-          
+
           if (currentConversation?.id) {
             return currentConversation.id
           }
           if (!currentUserId) {
             return undefined
           }
-          
+
           ensureStorageCapacity(currentConversation?.id ?? null, currentUserId)
-          
+
           const layoutState = useLayoutStore.getState()
           const defaultEnabledDataSourceIds = getDefaultEnabledDataSourceIds()
           layoutState.setEnabledDataSources(defaultEnabledDataSourceIds)
@@ -430,26 +430,26 @@ export const useChatStore = create<ChatStore>()(
         },
 
         selectConversation: (conversationId: string) => {
-          const { 
-            conversations, 
-            currentUserId, 
-            currentConversation, 
+          const {
+            conversations,
+            currentUserId,
+            currentConversation,
             isDeepResearchStreaming,
             deepResearchOwnerConversationId,
             activeDeepResearchMessageId,
             deepResearchLastEventId,
           } = get()
-          
+
           if (currentConversation?.id !== conversationId) {
             ensureStorageCapacity(conversationId, currentUserId)
           }
-          
+
           const conversation = conversations.find((c) => c.id === conversationId)
 
           if (conversation && conversation.userId === currentUserId) {
             // Save lastEventId if actively streaming before clearing
             if (
-              currentConversation && 
+              currentConversation &&
               currentConversation.id !== conversationId &&
               isDeepResearchStreaming &&
               deepResearchOwnerConversationId === currentConversation.id &&
@@ -464,11 +464,11 @@ export const useChatStore = create<ChatStore>()(
               // so switching back can restore todos, citations, agents, etc.
               get().persistDeepResearchToSession()
             }
-            
+
             // Close research panel when switching conversations
             // This ensures fresh data loads when panel is reopened
             useLayoutStore.getState().closeRightPanel()
-            
+
             // Always clear deep research ephemeral state when switching conversations
             // SSE will be disconnected by hook cleanup when deepResearchJobId becomes null
             set(
@@ -686,15 +686,15 @@ export const useChatStore = create<ChatStore>()(
 
         deleteConversation: (conversationId: string) => {
           const { currentConversation, conversations, deepResearchJobId, isDeepResearchStreaming } = get()
-          
+
           // Find the conversation being deleted
           const conversationToDelete = conversations.find((c) => c.id === conversationId)
-          
+
           // Check if this conversation has an active deep research job
           // Either from current ephemeral state (if deleting current conversation)
           // or from persisted message data
           let jobIdToCancel: string | null = null
-          
+
           if (currentConversation?.id === conversationId && isDeepResearchStreaming && deepResearchJobId) {
             // Deleting current conversation with active streaming
             jobIdToCancel = deepResearchJobId
@@ -703,16 +703,16 @@ export const useChatStore = create<ChatStore>()(
             const lastAgentResponse = [...conversationToDelete.messages]
               .reverse()
               .find((m) => m.messageType === 'agent_response' && m.deepResearchJobId)
-            
-            if (lastAgentResponse?.deepResearchJobId && 
-                lastAgentResponse.deepResearchJobStatus !== 'success' && 
+
+            if (lastAgentResponse?.deepResearchJobId &&
+                lastAgentResponse.deepResearchJobStatus !== 'success' &&
                 lastAgentResponse.deepResearchJobStatus !== 'failure' &&
                 lastAgentResponse.deepResearchJobStatus !== 'interrupted') {
               // Job might still be running
               jobIdToCancel = lastAgentResponse.deepResearchJobId
             }
           }
-          
+
           // Cancel the job asynchronously (fire and forget)
           if (jobIdToCancel) {
             import('@/adapters/api/deep-research-client').then(({ cancelJob }) => {
@@ -721,7 +721,7 @@ export const useChatStore = create<ChatStore>()(
               })
             })
           }
-          
+
           const updatedConversations = conversations.filter((c) => c.id !== conversationId)
 
           // If deleting the current conversation with active streaming, clear deep research state
@@ -758,35 +758,35 @@ export const useChatStore = create<ChatStore>()(
 
         deleteAllConversations: () => {
           const { conversations, currentUserId, currentConversation, isDeepResearchStreaming, deepResearchJobId } = get()
-          
+
           if (!currentUserId) return
-          
+
           // Get all conversations for the current user
           const userConversations = conversations.filter((c) => c.userId === currentUserId)
-          
+
           // Collect job IDs from conversations with potentially active deep research
           const jobIdsToCancel: string[] = []
-          
+
           // Add current streaming job if active
           if (isDeepResearchStreaming && deepResearchJobId) {
             jobIdsToCancel.push(deepResearchJobId)
           }
-          
+
           // Check all user conversations for potentially active jobs
           for (const conv of userConversations) {
             const lastAgentResponse = [...conv.messages]
               .reverse()
               .find((m) => m.messageType === 'agent_response' && m.deepResearchJobId)
-            
-            if (lastAgentResponse?.deepResearchJobId && 
-                lastAgentResponse.deepResearchJobStatus !== 'success' && 
+
+            if (lastAgentResponse?.deepResearchJobId &&
+                lastAgentResponse.deepResearchJobStatus !== 'success' &&
                 lastAgentResponse.deepResearchJobStatus !== 'failure' &&
                 lastAgentResponse.deepResearchJobStatus !== 'interrupted' &&
                 !jobIdsToCancel.includes(lastAgentResponse.deepResearchJobId)) {
               jobIdsToCancel.push(lastAgentResponse.deepResearchJobId)
             }
           }
-          
+
           // Cancel all jobs asynchronously (fire and forget)
           if (jobIdsToCancel.length > 0) {
             import('@/adapters/api/deep-research-client').then(async ({ cancelJob }) => {
@@ -802,16 +802,16 @@ export const useChatStore = create<ChatStore>()(
               })
             })
           }
-          
+
           // Clear all deep research session storage
           clearAllDeepResearchSessions()
-          
+
           // Filter out all conversations belonging to current user
           const remainingConversations = conversations.filter((c) => c.userId !== currentUserId)
-          
+
           // Check if current conversation belongs to user being cleared
           const shouldClearCurrent = currentConversation && currentConversation.userId === currentUserId
-          
+
           set(
             {
               conversations: remainingConversations,
@@ -1358,7 +1358,7 @@ export const useChatStore = create<ChatStore>()(
           patch: Partial<ChatMessage>
         ) => {
           const { currentConversation, conversations } = get()
-          
+
           const targetConversation = conversations.find((c) => c.id === conversationId)
           if (!targetConversation) return
 
@@ -1855,13 +1855,13 @@ export const useChatStore = create<ChatStore>()(
         },
 
         stopAllDeepResearchSpinners: (isSuccessfulCompletion = false) => {
-          const { 
+          const {
             deepResearchTodos,
             deepResearchLLMSteps,
             deepResearchAgents,
             deepResearchToolCalls,
           } = get()
-          
+
           // Stop todos (pending/in_progress → stopped or completed)
           const stoppedTodos = deepResearchTodos.map((todo) => ({
             ...todo,
@@ -1870,29 +1870,29 @@ export const useChatStore = create<ChatStore>()(
                 ? (isSuccessfulCompletion ? ('completed' as const) : ('stopped' as const))
                 : todo.status,
           }))
-          
+
           // Complete LLM steps (mark incomplete ones as complete)
           const stoppedLLMSteps = deepResearchLLMSteps.map((step) => ({
             ...step,
             isComplete: true,
           }))
-          
+
           // Stop agents (running → complete or error based on job success)
           const stoppedAgents = deepResearchAgents.map((agent) => ({
             ...agent,
-            status: agent.status === 'running' 
+            status: agent.status === 'running'
               ? (isSuccessfulCompletion ? ('complete' as const) : ('error' as const))
               : agent.status,
           }))
-          
+
           // Stop tool calls (running → complete or error based on job success)
           const stoppedToolCalls = deepResearchToolCalls.map((toolCall) => ({
             ...toolCall,
-            status: toolCall.status === 'running' 
+            status: toolCall.status === 'running'
               ? (isSuccessfulCompletion ? ('complete' as const) : ('error' as const))
               : toolCall.status,
           }))
-          
+
           set({
             deepResearchTodos: stoppedTodos,
             deepResearchLLMSteps: stoppedLLMSteps,
@@ -1989,8 +1989,8 @@ export const useChatStore = create<ChatStore>()(
           // Find messages with in-progress jobs (running or submitted)
           const activeJobMessage = [...currentConversation.messages]
             .reverse()
-            .find((m) => 
-              m.messageType === 'agent_response' && 
+            .find((m) =>
+              m.messageType === 'agent_response' &&
               m.deepResearchJobId &&
               m.isDeepResearchActive &&
               (m.deepResearchJobStatus === 'running' || m.deepResearchJobStatus === 'submitted')
@@ -2005,7 +2005,7 @@ export const useChatStore = create<ChatStore>()(
 
           try {
             const { getJobStatus } = await import('@/adapters/api/deep-research-client')
-            
+
             // Verify conversation hasn't changed
             if (get().currentConversation?.id !== conversationId) return
             if (get().isDeepResearchStreaming) return
@@ -2244,11 +2244,11 @@ export const useChatStore = create<ChatStore>()(
           agent: Omit<DeepResearchAgent, 'id' | 'startedAt' | 'status'>
         ) => {
           const { deepResearchAgents } = get()
-          
+
           if (deepResearchAgents.some((a) => a.id === id)) {
             return id
           }
-          
+
           const newAgent: DeepResearchAgent = {
             ...agent,
             id,
@@ -2539,7 +2539,7 @@ export const useChatStore = create<ChatStore>()(
         /**
          * Check if a specific session has active operations.
          * MUST scan message history because ephemeral state is cleared on session switch.
-         * 
+         *
          * @param conversationId - The conversation ID to check
          * @returns true if the session has active operations (shallow or deep research)
          */
@@ -2573,7 +2573,7 @@ export const useChatStore = create<ChatStore>()(
         /**
          * Check if ANY session has active operations.
          * Used to disable "Delete All Sessions" button.
-         * 
+         *
          * @returns true if any session has active operations
          */
         hasAnyBusySession: () => {
