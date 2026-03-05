@@ -39,6 +39,7 @@ from aiq_agent.common import render_prompt_template
 from aiq_agent.common.citation_verification import EmptySourceRegistryError
 from aiq_agent.common.citation_verification import SourceRegistry
 from aiq_agent.common.citation_verification import extract_sources_from_tool_result
+from aiq_agent.common.citation_verification import get_session_registry
 from aiq_agent.common.citation_verification import sanitize_report
 from aiq_agent.common.citation_verification import verify_citations
 
@@ -113,13 +114,8 @@ class ShallowResearcherAgent:
         # Build tools info for prompt rendering
         self.tools_info = self._build_tools_info()
 
-        # Source registry for citation verification
+        # Source registry for citation verification (standalone mode fallback)
         self.source_registry = SourceRegistry()
-
-        # Share source registry with SSE callbacks for consistent citation tracking
-        for cb in self.callbacks:
-            if hasattr(cb, "set_source_registry"):
-                cb.set_source_registry(self.source_registry)
 
         # Build the LangGraph
         self._graph = self._build_graph()
@@ -239,6 +235,9 @@ class ShallowResearcherAgent:
             internal tools are ignored automatically.
             """
             result = await tool_node.ainvoke(state)
+            # Resolve registry at call time (not build time) so each request
+            # writes to its own session-scoped registry when available.
+            active_registry = get_session_registry() or self.source_registry
             for msg in result.get("messages", []):
                 if isinstance(msg, ToolMessage) and msg.content:
                     tool_name = getattr(msg, "name", "") or ""
@@ -246,7 +245,7 @@ class ShallowResearcherAgent:
                         continue
                     sources = extract_sources_from_tool_result(tool_name, str(msg.content))
                     for source in sources:
-                        self.source_registry.add(source)
+                        active_registry.add(source)
                     if sources:
                         logger.info(
                             "[CitationRegistry] Captured %d source(s) from %s: %s",
@@ -278,7 +277,15 @@ class ShallowResearcherAgent:
         Returns:
             Updated state with response in messages.
         """
-        self.source_registry.clear()
+        # Resolve the registry for this request: session-scoped (conversation
+        # mode) or instance-scoped with clear (standalone mode).  We use a
+        # local variable so we never mutate the shared agent instance.
+        session_registry = get_session_registry()
+        if session_registry is not None:
+            registry = session_registry
+        else:
+            self.source_registry.clear()
+            registry = self.source_registry
 
         recursion_limit = (self.max_llm_turns * 2) + 10
         config = {"recursion_limit": recursion_limit}
@@ -294,13 +301,15 @@ class ShallowResearcherAgent:
                 content = str(last_msg.content)
 
                 # Step 1: verify citations against registry
-                if self.source_registry.all_sources():
-                    verification = verify_citations(content, self.source_registry)
-                    if verification.removed_citations:
-                        logger.info(
-                            "Shallow researcher: removed %d invalid citations",
-                            len(verification.removed_citations),
-                        )
+                if registry.all_sources():
+                    verification = verify_citations(content, registry)
+                    logger.debug(
+                        "Shallow researcher: citation verification complete — "
+                        "%d valid, %d removed, %d sources in registry",
+                        len(verification.valid_citations),
+                        len(verification.removed_citations),
+                        len(registry.all_sources()),
+                    )
                     content = verification.verified_report
                 else:
                     raise EmptySourceRegistryError("shallow research")

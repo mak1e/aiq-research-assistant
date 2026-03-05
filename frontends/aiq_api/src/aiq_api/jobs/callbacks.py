@@ -41,6 +41,8 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+from aiq_agent.common.citation_verification import get_session_registry
+
 if TYPE_CHECKING:
     from .event_store import EventStore
 
@@ -230,7 +232,6 @@ class AgentEventCallback(BaseCallbackHandler):
         self._job_id = event_store.job_id if event_store else None
         self._instance_discovered_urls: set[str] = set()
         self._instance_cited_urls: set[str] = set()
-        self._source_registry = None  # Set via set_source_registry() for verified citation tracking
         self._init_job_url_sets()
 
     def _init_job_url_sets(self) -> None:
@@ -346,17 +347,9 @@ class AgentEventCallback(BaseCallbackHandler):
                 return name
         return kwargs.get("name", "unknown")
 
-    def set_source_registry(self, registry) -> None:
-        """Attach a SourceRegistry for verified citation tracking.
-
-        When set, citation_source events use the registry (which captures
-        URLs from ALL tool calls via middleware) instead of the callback's
-        own pattern-based _is_search_tool check. This means:
-        - All tools are covered, not just ones matching SEARCH_TOOL_PATTERNS
-        - URL normalization is consistent with verify_citations()
-        - citation_use validation uses the same registry as post-processing
-        """
-        self._source_registry = registry
+    def _get_source_registry(self):
+        """Return the session-scoped SourceRegistry if set, otherwise None."""
+        return get_session_registry()
 
     def emit_final_report(self, content: str) -> None:
         """Emit the post-processed final report as an OUTPUT artifact.
@@ -465,8 +458,9 @@ class AgentEventCallback(BaseCallbackHandler):
                 continue
 
             is_valid = False
-            if self._source_registry is not None:
-                is_valid = self._source_registry.has_url(url)
+            registry = self._get_source_registry()
+            if registry is not None:
+                is_valid = registry.has_url(url)
             else:
                 is_valid = normalized in self._discovered_urls
 

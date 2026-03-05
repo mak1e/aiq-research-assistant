@@ -36,8 +36,12 @@ from nat.data_models.api_server import UserMessageContentRoleType
 
 from .callbacks import VerboseTraceCallback
 from .citation_verification import SourceRegistry
+from .citation_verification import get_or_create_session_registry
+from .citation_verification import get_session_registry
 from .citation_verification import register_source_parser
+from .citation_verification import reset_session_registry
 from .citation_verification import sanitize_report
+from .citation_verification import set_session_registry
 from .citation_verification import verify_citations
 from .data_sources import DEFAULT_DATA_SOURCES
 from .data_sources import extract_messages_and_sources
@@ -71,13 +75,17 @@ __all__ = [
     "format_data_source_tools",
     "format_tool_unavailability_error",
     "get_checkpointer",
+    "get_or_create_session_registry",
+    "get_session_registry",
     "get_latest_user_query",
     "is_postgres_dsn",
     "load_prompt",
     "parse_data_sources",
     "register_source_parser",
     "render_prompt_template",
+    "reset_session_registry",
     "sanitize_report",
+    "set_session_registry",
     "validate_tool_availability",
     "verify_citations",
 ]
