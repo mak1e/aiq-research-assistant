@@ -99,3 +99,28 @@ functions:
     orchestrator_llm: hosted_llm   # hosted for deep thinking
     # ...
 ```
+
+## NVIDIA Hosted API Considerations
+
+The default configs use `https://integrate.api.nvidia.com/v1`, which is NVIDIA's developer-facing hosted NIM API. This service is convenient for getting started but has limitations that matter for production use and long-running evaluations.
+
+### Known Limitations
+
+**Model availability**
+
+Models served through `integrate.api.nvidia.com` are subject to change:
+
+- Model versions may be updated or deprecated without notice
+- Partner-hosted models (for example, `openai/gpt-oss-120b`) depend on third-party availability and may be removed from the NVIDIA-hosted endpoint
+- Check [build.nvidia.com](https://build.nvidia.com/explore/discover) for current model availability and changelogs
+
+### Mitigation Strategies
+
+| Issue | Recommended action |
+|-------|-------------------|
+| Rate limiting during benchmarks | Lower `max_concurrency` in eval config; add delays between requests |
+| Frequent `504` timeouts | Increase `timeout` parameter; switch to a self-hosted NIM for that role |
+| Model removed or deprecated | Update `model_name` to the replacement model; pin a tested model version when possible |
+| Production reliability requirements | Use self-hosted NIMs or an NVIDIA Enterprise API agreement with SLA guarantees |
+
+For self-hosted NIM setup, refer to [Using Downloadable NIMs](#using-downloadable-nims-self-hosted) above.
